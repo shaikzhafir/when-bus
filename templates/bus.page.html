@@ -1,0 +1,33 @@
+<button class="mb-6 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" hx-get="/getBusArrival"
+    hx-target="#bus-list" hx-swap="innerHTML">
+    Refresh Arrivals
+</button>
+
+<!-- Bus List Container -->
+<div id="bus-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {{range .}}
+    <div class="bg-white rounded-lg shadow-md p-4">
+        <div class="flex justify-between items-center mb-3">
+            <div>
+                <span class="text-2xl font-bold text-blue-600">{{.ServiceNo}}</span>
+                <span class="text-sm text-gray-500 ml-2">{{.Operator}}</span>
+            </div>
+            {{if .IsWheelchair}}
+            <span class="text-blue-500">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path
+                        d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+                </svg>
+            </span>
+            {{end}}
+        </div>
+
+        {{range $index, $arrival := .NextBuses}}
+        <div class="flex justify-between items-center bg-gray-50 rounded p-2 mb-2">
+            <div class="text-lg">{{$arrival}}</div>
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+</div>

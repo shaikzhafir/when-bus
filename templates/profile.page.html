@@ -1,0 +1,13 @@
+{{template "main" .}}
+{{define "content"}}
+<div class="my-10 flex flex-col justify-center items-center">
+    <p class="text-center font-extrabold">profile page</p>
+    <div class="border-2 border-black p-5">
+        <p>Name is {{ .Name }}</p>
+        <p>Email is {{ .Email }}</p>
+        <p>Picture is <img src="{{ .Avatar }}" alt="profile picture" class="h-10 w-10 rounded-full"></p>
+    </div>
+
+    <p><a href="/google/logout">logout</a></p>
+</div>
+{{end}}

@@ -1,0 +1,9 @@
+{{template "main" .}}
+{{define "content"}}
+<div class="my-10 text-center">
+    <p class="text-center font-extrabold">when bus arrive (ubi only)</p>
+    
+    <button id="get-bus-arrival" hx-get="/getBusArrival" hx-target="#output" class="mb-6 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Get Bus Arrival</button>
+    <div id="output"></div>
+</div>
+{{end}}

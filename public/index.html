@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://unpkg.com/htmx.org/dist/htmx.js"></script>
+    <link href="/static/output.css" type="text/css" rel="stylesheet" />
+    <title>Go HTMX Starter</title>
+  </head>
+  <body>
+    <div class="mt-14 flex flex-col items-center justify-center">
+      <div class="mt-14">
+        <form hx-post="/api" hx-target="#output">
+          <input
+            class="border-solid border-2 border-black p-2"
+            type="text"
+            name="name"
+          />
+          <button class="border-solid border-2 border-black p-2" type="submit">
+            Submit
+          </button>
+        </form>
+        <div id="output"></div>
+      </div>
+    </div>
+  </body>
+</html>
