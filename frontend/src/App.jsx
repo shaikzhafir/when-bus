@@ -23,7 +23,9 @@ function App() {
     : "http://localhost:8080";
   const fetchBusArrivals = async (newStop) => {
     try {
-      console.log(`api url is ${API_URL}`);
+      if (!newStop) {
+        newStop = selectedStop;
+      }
       const params = new URLSearchParams({
         busStopCode: BUS_STOPS[newStop].code,
         serviceNo: BUS_STOPS[newStop].serviceNo,
@@ -69,7 +71,7 @@ function App() {
         <p className="text-5xl">{BUS_STOPS[selectedStop].name}</p>
 
         <button
-          onClick={fetchBusArrivals}
+          onClick={() => fetchBusArrivals("")}
           className="my-6 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
         >
           Refresh Arrivals
