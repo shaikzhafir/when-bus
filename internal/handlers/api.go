@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/shaikzhafir/go-htmx-starter/internal/services"
@@ -30,7 +31,10 @@ func (a *APIHandler) GetBusArrival() http.HandlerFunc {
 	// render profile page
 	return func(w http.ResponseWriter, r *http.Request) {
 		// render profile page
-		busArrival, err := a.service.GetBusArrival()
+		queryParams := r.URL.Query()
+		busStopCode := queryParams.Get("busStopCode")
+		log.Printf("Fetching bus arrival for bus stop code: %s", busStopCode)
+		busArrival, err := a.service.GetBusArrival(busStopCode)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

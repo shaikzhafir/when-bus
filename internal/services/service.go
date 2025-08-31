@@ -12,7 +12,7 @@ import (
 )
 
 type Service interface {
-	GetBusArrival() ([]BusDisplayInfo, error)
+	GetBusArrival(code string) ([]BusDisplayInfo, error)
 }
 
 // UI will be displaying this
@@ -55,7 +55,7 @@ func NewService() Service {
 	return &service{}
 }
 
-func (s *service) GetBusArrival() ([]BusDisplayInfo, error) {
+func (s *service) GetBusArrival(code string) ([]BusDisplayInfo, error) {
 	// write an api call to get bus arrival
 	// api url is https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival?BusStopCode=71119
 	// it needs an api key
@@ -67,7 +67,7 @@ func (s *service) GetBusArrival() ([]BusDisplayInfo, error) {
 
 	// Add query parameter
 	q := req.URL.Query()
-	q.Add("BusStopCode", "71119")
+	q.Add("BusStopCode", code)
 	req.URL.RawQuery = q.Encode()
 
 	// Add API key header
