@@ -12,7 +12,7 @@ func init() {
 	var file *os.File
 	logDir := "/opt/when-bus/when-bus.log"
 
-	if os.Getenv("PROD") == "true" {
+	if os.Getenv("ENV") == "prod" {
 		file, _ = os.OpenFile(logDir, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	} else {
 		file = os.Stdout
