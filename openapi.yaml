@@ -1,0 +1,96 @@
+openapi: 3.0.3
+info:
+  title: When Bus API
+  description: API for bus arrival information
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /api:
+    get:
+      summary: Get fake data
+      description: Returns fake data with an optional name parameter
+      operationId: getFakeData
+      parameters:
+        - name: name
+          in: query
+          description: Name parameter
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "wow this is fake data!, u wrote John in the request!"
+
+  /getBusArrival:
+    get:
+      summary: Get bus arrival information
+      description: Returns bus arrival times for a given bus stop code
+      operationId: getBusArrival
+      parameters:
+        - name: busStopCode
+          in: query
+          description: Bus stop code
+          required: true
+          schema:
+            type: string
+            example: "71119"
+      responses:
+        '200':
+          description: Successful response with bus arrival information
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BusDisplayInfo'
+        '500':
+          description: Internal server error
+          content:
+            text/plain:
+              schema:
+                type: string
+
+components:
+  schemas:
+    BusDisplayInfo:
+      type: object
+      properties:
+        ServiceNo:
+          type: string
+          description: Bus service number
+          example: "123"
+        Operator:
+          type: string
+          description: Bus operator
+          example: "SBST"
+        NextBuses:
+          type: array
+          items:
+            type: string
+          description: Array of arrival times in minutes
+          example: ["5", "12", "25"]
+        LoadStatus:
+          type: array
+          items:
+            type: string
+          description: Array of load statuses
+          example: ["SEA", "SDA", "LSD"]
+        IsWheelchair:
+          type: boolean
+          description: Whether the bus has wheelchair accessibility
+          example: true
+      required:
+        - ServiceNo
+        - Operator
+        - NextBuses
+        - LoadStatus
+        - IsWheelchair
+
