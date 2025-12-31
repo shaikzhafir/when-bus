@@ -5,7 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/shaikzhafir/go-htmx-starter/internal/services"
+	"github.com/shaikzhafir/when-bus/internal/generated"
+	"github.com/shaikzhafir/when-bus/internal/services"
 )
 
 func NewAPIHandler(svc services.Service) *APIHandler {
@@ -16,33 +17,45 @@ type APIHandler struct {
 	service services.Service
 }
 
-func (a *APIHandler) GetFakeData() http.HandlerFunc {
-	// handle the request
-	return func(w http.ResponseWriter, r *http.Request) {
-		// get params from request
-		// do some processing
-		// return response
-		name := r.FormValue("name")
-		w.Write([]byte("wow this is fake data!, u wrote " + name + "in the request!"))
+// Implement the generated ServerInterface
+var _ generated.ServerInterface = (*APIHandler)(nil)
+
+// GetFakeData implements the generated ServerInterface
+func (a *APIHandler) GetFakeData(w http.ResponseWriter, r *http.Request, params generated.GetFakeDataParams) {
+	name := ""
+	if params.Name != nil {
+		name = *params.Name
 	}
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("wow this is fake data!, u wrote " + name + " in the request!"))
 }
 
-func (a *APIHandler) GetBusArrival() http.HandlerFunc {
-	// render profile page
-	return func(w http.ResponseWriter, r *http.Request) {
-		// render profile page
-		queryParams := r.URL.Query()
-		busStopCode := queryParams.Get("busStopCode")
-		log.Printf("Fetching bus arrival for bus stop code: %s", busStopCode)
-		busArrival, err := a.service.GetBusArrival(busStopCode)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+// GetBusArrival implements the generated ServerInterface
+func (a *APIHandler) GetBusArrival(w http.ResponseWriter, r *http.Request, params generated.GetBusArrivalParams) {
+	log.Printf("Fetching bus arrival for bus stop code: %s", params.BusStopCode)
+	busArrival, err := a.service.GetBusArrival(params.BusStopCode)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Convert service BusDisplayInfo to generated BusDisplayInfo
+	generatedBusArrival := make([]generated.BusDisplayInfo, len(busArrival))
+	for i, bus := range busArrival {
+		generatedBusArrival[i] = generated.BusDisplayInfo{
+			ServiceNo:    bus.ServiceNo,
+			Operator:     bus.Operator,
+			NextBuses:    bus.NextBuses,
+			LoadStatus:   bus.LoadStatus,
+			IsWheelchair: bus.IsWheelchair,
 		}
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(busArrival); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(generatedBusArrival); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 }

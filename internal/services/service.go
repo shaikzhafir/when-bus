@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"os"
 	"time"
-
-	log "github.com/shaikzhafir/go-htmx-starter/internal/logging"
 )
 
 type Service interface {
@@ -83,15 +81,11 @@ func (s *service) GetBusArrival(code string) ([]BusDisplayInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error reading response body: %v", err)
 	}
-
-	log.Info("body: %v", string(body))
-
 	busArrivalResp := BusArrivalResponse{}
 
 	if err := json.Unmarshal(body, &busArrivalResp); err != nil {
 		return nil, fmt.Errorf("error unmarshaling response: %v", err)
 	}
-
 	var result []BusDisplayInfo
 	for _, svc := range busArrivalResp.Services {
 		info := BusDisplayInfo{

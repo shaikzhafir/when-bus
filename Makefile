@@ -3,9 +3,9 @@
 # OpenAPI code generation
 generate-api:
 	@echo "Generating API code from OpenAPI spec..."
-	@which oapi-codegen > /dev/null || (echo "oapi-codegen not found. Installing..." && go install github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@latest)
+	@which oapi-codegen > /dev/null || (echo "oapi-codegen not found. Installing..." && go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest)
 	@mkdir -p internal/generated
-	oapi-codegen -generate types,server -package generated -o internal/generated/api.gen.go openapi.yaml
+	oapi-codegen -generate types,std-http -package generated -o internal/generated/api.gen.go openapi.yaml
 	@echo "API code generated successfully!"
 
 # Install oapi-codegen if not present

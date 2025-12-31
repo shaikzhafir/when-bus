@@ -1,40 +1,37 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
+	"os"
 
-	"github.com/shaikzhafir/go-htmx-starter/internal/commons"
-	h "github.com/shaikzhafir/go-htmx-starter/internal/handlers"
-	log "github.com/shaikzhafir/go-htmx-starter/internal/logging"
-	"github.com/shaikzhafir/go-htmx-starter/internal/services"
+	"github.com/shaikzhafir/when-bus/internal/generated"
+	h "github.com/shaikzhafir/when-bus/internal/handlers"
+	log "github.com/shaikzhafir/when-bus/internal/logging"
+	"github.com/shaikzhafir/when-bus/internal/services"
 )
-
-// Config configures the main ServeMux.
-type Config struct {
-	ClientID     string
-	ClientSecret string
-}
 
 func main() {
 	mux := initServeMux()
-	log.Info("Server started on port %d", commons.DefaultPort)
-	err := http.ListenAndServe(fmt.Sprintf(":%d", commons.DefaultPort), mux)
-	if err != nil {
-		log.Error("Error starting server %s", err.Error())
+	if os.Getenv("ENV") == "prod" {
+		prodUrl := os.Getenv("PROD_URL")
+		log.Info("starting server on %s", prodUrl)
+		err := http.ListenAndServe(prodUrl, mux)
+		if err != nil {
+			log.Error("error starting server: %v", err)
+		}
+	} else {
+		log.Info("starting server on port 8080")
+		err := http.ListenAndServe(":8080", mux)
+		if err != nil {
+			log.Error("error starting server: %v", err)
+		}
 	}
 }
 
 func initServeMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	handlers := h.NewAPIHandler(services.NewService())
-	// css and js files
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	// other paths
-	mux.HandleFunc("/api", handlers.GetFakeData())
-	mux.HandleFunc("/getBusArrival", handlers.GetBusArrival())
-	// html files (also catch all paths)
-	fs := http.FileServer(http.Dir("frontend/dist"))
-	mux.Handle("/", fs)
+	// Register API handlers using generated code
+	apiHandler := h.NewAPIHandler(services.NewService())
+	generated.HandlerFromMux(apiHandler, mux)
 	return mux
 }

@@ -16,7 +16,7 @@ fi
 mkdir -p internal/generated
 
 # Generate the code
-oapi-codegen -generate types,server -package generated -o internal/generated/api.gen.go openapi.yaml
+oapi-codegen -generate types,std-http -package generated -o internal/generated/api.gen.go openapi.yaml
 
 echo "API code generated successfully in internal/generated/api.gen.go"
 

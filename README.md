@@ -1,21 +1,12 @@
-im just using this so i dont have to rebuild this shit everytime i have some sideproject idea that i will never complete and leave it hanging
-
-- uses tailwindcss
-- uses go templating + htmx for client interaction with server
-- all built into a single container
-
-dependencies
-1) tailwindcss, https://tailwindcss.com/docs/installation , follow standalone executable
-   - note: if u are adding new folder for html files, please update tailwind.config.js to apply those changes
-2) entr for hot reload, https://jvns.ca/blog/2020/06/28/entr/
-3) htmx for simple client server interactivity
+when-bus is a middleman to the LTA public api for my own use
 
 ## OpenAPI Code Generation
 
-This project includes OpenAPI specification for API documentation and code generation.
+This project uses OpenAPI specification for API documentation and code generation. The generated code uses standard library `net/http` only - no external frameworks.
 
 ### Files
 - `openapi.yaml` - OpenAPI 3.0 specification defining the API endpoints
+- `internal/generated/api.gen.go` - Generated server code (do not edit manually)
 
 ### Generating Server Code
 
@@ -33,11 +24,11 @@ make generate-api
 
 **Manual command:**
 ```bash
-go install github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@latest
-oapi-codegen -generate types,server -package generated -o internal/generated/api.gen.go openapi.yaml
+go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+oapi-codegen -generate types,std-http -package generated -o internal/generated/api.gen.go openapi.yaml
 ```
 
-The generated code will be placed in `internal/generated/api.gen.go`.
+The generated code will be placed in `internal/generated/api.gen.go` and uses standard library `net/http` handlers.
 
 ### Other Make Targets
 - `make install-tools` - Install oapi-codegen tool

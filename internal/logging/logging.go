@@ -23,11 +23,11 @@ func init() {
 }
 
 func Debug(msg string, a ...interface{}) {
-	logger.Warn(fmt.Sprintf(msg, a...))
+	logger.Debug(fmt.Sprintf(msg, a...))
 }
 
 func Info(msg string, a ...interface{}) {
-	logger.Warn(fmt.Sprintf(msg, a...))
+	logger.Info(fmt.Sprintf(msg, a...))
 }
 
 func Warn(msg string, a ...interface{}) {
