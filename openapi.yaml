@@ -58,6 +58,42 @@ paths:
               schema:
                 type: string
 
+  /getNearestBusStops:
+    get:
+      summary: Get nearest bus stops
+      description: Returns the nearest 2 bus stop codes for given latitude and longitude coordinates
+      operationId: getNearestBusStops
+      parameters:
+        - name: lat
+          in: query
+          description: Latitude coordinate
+          required: true
+          schema:
+            type: number
+            format: float
+            example: 1.326277
+        - name: lng
+          in: query
+          description: Longitude coordinate
+          required: true
+          schema:
+            type: number
+            format: float
+            example: 103.890342
+      responses:
+        '200':
+          description: Successful response with nearest bus stop codes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NearestBusStopsResponse'
+        '500':
+          description: Internal server error
+          content:
+            text/plain:
+              schema:
+                type: string
+
 components:
   schemas:
     BusDisplayInfo:
@@ -93,4 +129,15 @@ components:
         - NextBuses
         - LoadStatus
         - IsWheelchair
+    NearestBusStopsResponse:
+      type: object
+      properties:
+        BusStopCodes:
+          type: array
+          items:
+            type: string
+          description: Array of the nearest 2 bus stop codes
+          example: ["71119", "71120"]
+      required:
+        - BusStopCodes
 

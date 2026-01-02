@@ -30,6 +30,12 @@ type BusDisplayInfo struct {
 	ServiceNo string `json:"ServiceNo"`
 }
 
+// NearestBusStopsResponse defines model for NearestBusStopsResponse.
+type NearestBusStopsResponse struct {
+	// BusStopCodes Array of the nearest 2 bus stop codes
+	BusStopCodes []string `json:"BusStopCodes"`
+}
+
 // GetFakeDataParams defines parameters for GetFakeData.
 type GetFakeDataParams struct {
 	// Name Name parameter
@@ -42,6 +48,15 @@ type GetBusArrivalParams struct {
 	BusStopCode string `form:"busStopCode" json:"busStopCode"`
 }
 
+// GetNearestBusStopsParams defines parameters for GetNearestBusStops.
+type GetNearestBusStopsParams struct {
+	// Lat Latitude coordinate
+	Lat float32 `form:"lat" json:"lat"`
+
+	// Lng Longitude coordinate
+	Lng float32 `form:"lng" json:"lng"`
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Get fake data
@@ -50,6 +65,9 @@ type ServerInterface interface {
 	// Get bus arrival information
 	// (GET /getBusArrival)
 	GetBusArrival(w http.ResponseWriter, r *http.Request, params GetBusArrivalParams)
+	// Get nearest bus stops
+	// (GET /getNearestBusStops)
+	GetNearestBusStops(w http.ResponseWriter, r *http.Request, params GetNearestBusStopsParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -113,6 +131,55 @@ func (siw *ServerInterfaceWrapper) GetBusArrival(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetBusArrival(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNearestBusStops operation middleware
+func (siw *ServerInterfaceWrapper) GetNearestBusStops(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetNearestBusStopsParams
+
+	// ------------- Required query parameter "lat" -------------
+
+	if paramValue := r.URL.Query().Get("lat"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lat"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "lat", r.URL.Query(), &params.Lat)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lat", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "lng" -------------
+
+	if paramValue := r.URL.Query().Get("lng"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lng"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "lng", r.URL.Query(), &params.Lng)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lng", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNearestBusStops(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -244,6 +311,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc("GET "+options.BaseURL+"/api", wrapper.GetFakeData)
 	m.HandleFunc("GET "+options.BaseURL+"/getBusArrival", wrapper.GetBusArrival)
+	m.HandleFunc("GET "+options.BaseURL+"/getNearestBusStops", wrapper.GetNearestBusStops)
 
 	return m
 }

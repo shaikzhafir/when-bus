@@ -59,3 +59,24 @@ func (a *APIHandler) GetBusArrival(w http.ResponseWriter, r *http.Request, param
 		return
 	}
 }
+
+// GetNearestBusStops implements the generated ServerInterface
+func (a *APIHandler) GetNearestBusStops(w http.ResponseWriter, r *http.Request, params generated.GetNearestBusStopsParams) {
+	log.Printf("Finding nearest bus stops for coordinates: lat=%f, lng=%f", params.Lat, params.Lng)
+	busStopCodes, err := a.service.GetNearestBusStops(params.Lat, params.Lng)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := generated.NearestBusStopsResponse{
+		BusStopCodes: busStopCodes,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
