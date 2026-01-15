@@ -15,7 +15,7 @@ import (
 
 type Service interface {
 	GetBusArrival(code string) ([]BusDisplayInfo, error)
-	GetNearestBusStops(lat, lng float32) ([]string, error)
+	GetNearestBusStops(lat, lng float32) ([]NearestBusStopWithArrivals, error)
 }
 
 // UI will be displaying this
@@ -65,7 +65,18 @@ type BusStopsResponse struct {
 
 type busStopDistance struct {
 	BusStopCode string
+	RoadName    string
+	Description string
 	Distance    float64
+}
+
+// NearestBusStopWithArrivals represents a bus stop with its arrival information
+type NearestBusStopWithArrivals struct {
+	BusStopCode string
+	RoadName    string
+	Description string
+	Distance    float64
+	Arrivals    []BusDisplayInfo
 }
 
 type service struct {
@@ -174,7 +185,7 @@ func haversineDistance(lat1, lng1, lat2, lng2 float64) float64 {
 	return distance
 }
 
-func (s *service) GetNearestBusStops(lat, lng float32) ([]string, error) {
+func (s *service) GetNearestBusStops(lat, lng float32) ([]NearestBusStopWithArrivals, error) {
 	// Fetch all bus stops from LTA API (paginated, 500 per page)
 	client := &http.Client{}
 	allBusStops := make([]BusStop, 0)
@@ -183,7 +194,7 @@ func (s *service) GetNearestBusStops(lat, lng float32) ([]string, error) {
 
 	for {
 		// Build URL with skip parameter
-		url := fmt.Sprintf("https://datamall2.mytransport.sg/ltaodataservice/v3/BusStops?$skip=%d", skip)
+		url := fmt.Sprintf("https://datamall2.mytransport.sg/ltaodataservice/BusStops?$skip=%d", skip)
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			return nil, fmt.Errorf("error creating request: %v", err)
@@ -202,6 +213,8 @@ func (s *service) GetNearestBusStops(lat, lng float32) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error reading response body: %v", err)
 		}
+
+		log.Info("Response body: %s", string(body))
 
 		var busStopsResp BusStopsResponse
 		if err := json.Unmarshal(body, &busStopsResp); err != nil {
@@ -228,6 +241,8 @@ func (s *service) GetNearestBusStops(lat, lng float32) ([]string, error) {
 		distance := haversineDistance(float64(lat), float64(lng), stop.Latitude, stop.Longitude)
 		distances = append(distances, busStopDistance{
 			BusStopCode: stop.BusStopCode,
+			RoadName:    stop.RoadName,
+			Description: stop.Description,
 			Distance:    distance,
 		})
 	}
@@ -237,10 +252,24 @@ func (s *service) GetNearestBusStops(lat, lng float32) ([]string, error) {
 		return distances[i].Distance < distances[j].Distance
 	})
 
-	// Return the nearest 2 bus stop codes
-	result := make([]string, 0, 2)
-	for i := 0; i < 2 && i < len(distances); i++ {
-		result = append(result, distances[i].BusStopCode)
+	// Get the nearest 4 bus stops and fetch their arrival times
+	result := make([]NearestBusStopWithArrivals, 0, 4)
+	for i := 0; i < 4 && i < len(distances); i++ {
+		busStopCode := distances[i].BusStopCode
+		arrivals, err := s.GetBusArrival(busStopCode)
+		if err != nil {
+			log.Info("Error fetching arrivals for bus stop %s: %v", busStopCode, err)
+			// Continue with empty arrivals if there's an error
+			arrivals = []BusDisplayInfo{}
+		}
+
+		result = append(result, NearestBusStopWithArrivals{
+			BusStopCode: distances[i].BusStopCode,
+			RoadName:    distances[i].RoadName,
+			Description: distances[i].Description,
+			Distance:    distances[i].Distance,
+			Arrivals:    arrivals,
+		})
 	}
 
 	return result, nil

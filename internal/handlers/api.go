@@ -63,14 +63,34 @@ func (a *APIHandler) GetBusArrival(w http.ResponseWriter, r *http.Request, param
 // GetNearestBusStops implements the generated ServerInterface
 func (a *APIHandler) GetNearestBusStops(w http.ResponseWriter, r *http.Request, params generated.GetNearestBusStopsParams) {
 	log.Printf("Finding nearest bus stops for coordinates: lat=%f, lng=%f", params.Lat, params.Lng)
-	busStopCodes, err := a.service.GetNearestBusStops(params.Lat, params.Lng)
+	nearestStops, err := a.service.GetNearestBusStops(params.Lat, params.Lng)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	response := generated.NearestBusStopsResponse{
-		BusStopCodes: busStopCodes,
+	// Convert service NearestBusStopWithArrivals to generated format
+	response := make(generated.NearestBusStopsResponse, len(nearestStops))
+	for i, stop := range nearestStops {
+		// Convert service BusDisplayInfo to generated BusDisplayInfo
+		generatedArrivals := make([]generated.BusDisplayInfo, len(stop.Arrivals))
+		for j, arrival := range stop.Arrivals {
+			generatedArrivals[j] = generated.BusDisplayInfo{
+				ServiceNo:    arrival.ServiceNo,
+				Operator:     arrival.Operator,
+				NextBuses:    arrival.NextBuses,
+				LoadStatus:   arrival.LoadStatus,
+				IsWheelchair: arrival.IsWheelchair,
+			}
+		}
+
+		response[i] = generated.NearestBusStopWithArrivals{
+			BusStopCode: stop.BusStopCode,
+			RoadName:    stop.RoadName,
+			Description: stop.Description,
+			Distance:    float32(stop.Distance),
+			Arrivals:    generatedArrivals,
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

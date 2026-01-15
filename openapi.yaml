@@ -60,8 +60,8 @@ paths:
 
   /getNearestBusStops:
     get:
-      summary: Get nearest bus stops
-      description: Returns the nearest 2 bus stop codes for given latitude and longitude coordinates
+      summary: Get nearest bus stops with arrivals
+      description: Returns the nearest 4 bus stops with their bus arrival times, sorted by nearest first
       operationId: getNearestBusStops
       parameters:
         - name: lat
@@ -82,7 +82,7 @@ paths:
             example: 103.890342
       responses:
         '200':
-          description: Successful response with nearest bus stop codes
+          description: Successful response with nearest bus stops and their arrival times
           content:
             application/json:
               schema:
@@ -130,14 +130,39 @@ components:
         - LoadStatus
         - IsWheelchair
     NearestBusStopsResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/NearestBusStopWithArrivals'
+      description: Array of the nearest 4 bus stops with their arrival information, sorted by nearest first
+    NearestBusStopWithArrivals:
       type: object
       properties:
-        BusStopCodes:
+        BusStopCode:
+          type: string
+          description: Bus stop code
+          example: "71119"
+        RoadName:
+          type: string
+          description: Road name where the bus stop is located
+          example: "Jurong West Ave 1"
+        Description:
+          type: string
+          description: Description of the bus stop location
+          example: "Blk 123"
+        Distance:
+          type: number
+          format: float
+          description: Distance from the provided coordinates in kilometers
+          example: 0.15
+        Arrivals:
           type: array
           items:
-            type: string
-          description: Array of the nearest 2 bus stop codes
-          example: ["71119", "71120"]
+            $ref: '#/components/schemas/BusDisplayInfo'
+          description: Array of bus arrival information for this bus stop
       required:
-        - BusStopCodes
+        - BusStopCode
+        - RoadName
+        - Description
+        - Distance
+        - Arrivals
 

@@ -30,11 +30,26 @@ type BusDisplayInfo struct {
 	ServiceNo string `json:"ServiceNo"`
 }
 
-// NearestBusStopsResponse defines model for NearestBusStopsResponse.
-type NearestBusStopsResponse struct {
-	// BusStopCodes Array of the nearest 2 bus stop codes
-	BusStopCodes []string `json:"BusStopCodes"`
+// NearestBusStopWithArrivals defines model for NearestBusStopWithArrivals.
+type NearestBusStopWithArrivals struct {
+	// Arrivals Array of bus arrival information for this bus stop
+	Arrivals []BusDisplayInfo `json:"Arrivals"`
+
+	// BusStopCode Bus stop code
+	BusStopCode string `json:"BusStopCode"`
+
+	// Description Description of the bus stop location
+	Description string `json:"Description"`
+
+	// Distance Distance from the provided coordinates in kilometers
+	Distance float32 `json:"Distance"`
+
+	// RoadName Road name where the bus stop is located
+	RoadName string `json:"RoadName"`
 }
+
+// NearestBusStopsResponse Array of the nearest 4 bus stops with their arrival information, sorted by nearest first
+type NearestBusStopsResponse = []NearestBusStopWithArrivals
 
 // GetFakeDataParams defines parameters for GetFakeData.
 type GetFakeDataParams struct {
@@ -65,7 +80,7 @@ type ServerInterface interface {
 	// Get bus arrival information
 	// (GET /getBusArrival)
 	GetBusArrival(w http.ResponseWriter, r *http.Request, params GetBusArrivalParams)
-	// Get nearest bus stops
+	// Get nearest bus stops with arrivals
 	// (GET /getNearestBusStops)
 	GetNearestBusStops(w http.ResponseWriter, r *http.Request, params GetNearestBusStopsParams)
 }
