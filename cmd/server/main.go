@@ -30,8 +30,10 @@ func main() {
 
 func initServeMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	// Register API handlers using generated code
 	apiHandler := h.NewAPIHandler(services.NewService())
-	generated.HandlerFromMux(apiHandler, mux)
+	generated.HandlerWithOptions(apiHandler, generated.StdHTTPServerOptions{
+		BaseRouter:       mux,
+		ErrorHandlerFunc: h.OpenAPIValidationErrorHandler,
+	})
 	return mux
 }

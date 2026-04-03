@@ -9,8 +9,6 @@ import (
 	"os"
 	"sort"
 	"time"
-
-	log "github.com/shaikzhafir/when-bus/internal/logging"
 )
 
 type Service interface {
@@ -114,10 +112,13 @@ func (s *service) GetBusArrival(code string) ([]BusDisplayInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error reading response body: %v", err)
 	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("LTA BusArrival API HTTP %d for BusStopCode=%q (body prefix: %.200q)", resp.StatusCode, code, string(body))
+	}
 	busArrivalResp := BusArrivalResponse{}
 
 	if err := json.Unmarshal(body, &busArrivalResp); err != nil {
-		return nil, fmt.Errorf("error unmarshaling response: %v", err)
+		return nil, fmt.Errorf("error unmarshaling LTA BusArrival response for BusStopCode=%q: %v (body prefix: %.200q)", code, err, string(body))
 	}
 	var result []BusDisplayInfo
 	for _, svc := range busArrivalResp.Services {
@@ -214,8 +215,6 @@ func (s *service) GetNearestBusStops(lat, lng float32) ([]NearestBusStopWithArri
 			return nil, fmt.Errorf("error reading response body: %v", err)
 		}
 
-		log.Info("Response body: %s", string(body))
-
 		var busStopsResp BusStopsResponse
 		if err := json.Unmarshal(body, &busStopsResp); err != nil {
 			return nil, fmt.Errorf("error unmarshaling response: %v", err)
@@ -232,8 +231,6 @@ func (s *service) GetNearestBusStops(lat, lng float32) ([]NearestBusStopWithArri
 		// Move to next page
 		skip += pageSize
 	}
-
-	log.Info("Fetched %d bus stops total", len(allBusStops))
 
 	// Calculate distance for each bus stop
 	distances := make([]busStopDistance, 0, len(allBusStops))
@@ -258,8 +255,7 @@ func (s *service) GetNearestBusStops(lat, lng float32) ([]NearestBusStopWithArri
 		busStopCode := distances[i].BusStopCode
 		arrivals, err := s.GetBusArrival(busStopCode)
 		if err != nil {
-			log.Info("Error fetching arrivals for bus stop %s: %v", busStopCode, err)
-			// Continue with empty arrivals if there's an error
+			// Omit arrivals for this stop; response still includes stop metadata.
 			arrivals = []BusDisplayInfo{}
 		}
 

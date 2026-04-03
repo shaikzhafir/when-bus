@@ -2,12 +2,22 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/shaikzhafir/when-bus/internal/generated"
+	log "github.com/shaikzhafir/when-bus/internal/logging"
 	"github.com/shaikzhafir/when-bus/internal/services"
 )
+
+func writeJSONError(w http.ResponseWriter, status int, reason, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"success": false,
+		"error":   message,
+		"reason":  reason,
+	})
+}
 
 func NewAPIHandler(svc services.Service) *APIHandler {
 	return &APIHandler{service: svc}
@@ -33,10 +43,17 @@ func (a *APIHandler) GetFakeData(w http.ResponseWriter, r *http.Request, params 
 
 // GetBusArrival implements the generated ServerInterface
 func (a *APIHandler) GetBusArrival(w http.ResponseWriter, r *http.Request, params generated.GetBusArrivalParams) {
-	log.Printf("Fetching bus arrival for bus stop code: %s", params.BusStopCode)
 	busArrival, err := a.service.GetBusArrival(params.BusStopCode)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Error(
+			"GetBusArrival failed: reason=upstream_or_parse_error busStopCode=%s method=%s query=%q remote_addr=%s err=%v",
+			params.BusStopCode,
+			r.Method,
+			r.URL.RawQuery,
+			r.RemoteAddr,
+			err,
+		)
+		writeJSONError(w, http.StatusInternalServerError, "upstream_or_parse_error", err.Error())
 		return
 	}
 
@@ -55,17 +72,30 @@ func (a *APIHandler) GetBusArrival(w http.ResponseWriter, r *http.Request, param
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(generatedBusArrival); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Error(
+			"GetBusArrival encode failed: reason=json_encode_error busStopCode=%s err=%v",
+			params.BusStopCode,
+			err,
+		)
+		writeJSONError(w, http.StatusInternalServerError, "json_encode_error", err.Error())
 		return
 	}
 }
 
 // GetNearestBusStops implements the generated ServerInterface
 func (a *APIHandler) GetNearestBusStops(w http.ResponseWriter, r *http.Request, params generated.GetNearestBusStopsParams) {
-	log.Printf("Finding nearest bus stops for coordinates: lat=%f, lng=%f", params.Lat, params.Lng)
 	nearestStops, err := a.service.GetNearestBusStops(params.Lat, params.Lng)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Error(
+			"GetNearestBusStops failed: reason=upstream_or_parse_error lat=%f lng=%f method=%s query=%q remote_addr=%s err=%v",
+			params.Lat,
+			params.Lng,
+			r.Method,
+			r.URL.RawQuery,
+			r.RemoteAddr,
+			err,
+		)
+		writeJSONError(w, http.StatusInternalServerError, "upstream_or_parse_error", err.Error())
 		return
 	}
 
@@ -96,7 +126,13 @@ func (a *APIHandler) GetNearestBusStops(w http.ResponseWriter, r *http.Request, 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Error(
+			"GetNearestBusStops encode failed: reason=json_encode_error lat=%f lng=%f err=%v",
+			params.Lat,
+			params.Lng,
+			err,
+		)
+		writeJSONError(w, http.StatusInternalServerError, "json_encode_error", err.Error())
 		return
 	}
 }
