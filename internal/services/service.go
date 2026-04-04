@@ -8,12 +8,25 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"sync"
 	"time"
+
+	log "github.com/shaikzhafir/when-bus/internal/logging"
+)
+
+const (
+	busStopsCacheTTL  = 24 * time.Hour
+	nearestCacheTTL   = 30 * time.Second
+	httpClientTimeout = 10 * time.Second
+	nearestStopsCount = 4
+	// nearestCacheKeyDecimals: only used for nearest-metadata cache keys, not for Haversine.
+	// 6 decimals ≈ 0.1 m latitude; distance always uses full float64 from the request.
+	nearestCacheKeyDecimals = 6
 )
 
 type Service interface {
 	GetBusArrival(code string) ([]BusDisplayInfo, error)
-	GetNearestBusStops(lat, lng float32) ([]NearestBusStopWithArrivals, error)
+	GetNearestBusStops(lat, lng float64) ([]NearestBusStopWithArrivals, error)
 }
 
 // UI will be displaying this
@@ -77,32 +90,52 @@ type NearestBusStopWithArrivals struct {
 	Arrivals    []BusDisplayInfo
 }
 
+type nearestCacheEntry struct {
+	// Only nearest-stop metadata is cached; arrivals are fetched on every request
+	// so NextBuses stay aligned with LTA (real-time).
+	nearest   []busStopDistance
+	fetchedAt time.Time
+}
+
 type service struct {
+	client *http.Client
+
+	busStopsBaseURL   string
+	busArrivalBaseURL string
+
+	// Bus stops are static infrastructure; cache them for 24h.
+	busStopsMu   sync.RWMutex
+	busStops     []BusStop
+	busStopsTime time.Time
+
+	// Short-lived cache for which stops are nearest (metadata only). Arrivals are
+	// always refreshed so NextBuses are not stale on cache hits.
+	nearestMu    sync.RWMutex
+	nearestCache map[string]nearestCacheEntry
 }
 
 func NewService() Service {
-	return &service{}
+	return &service{
+		client:            &http.Client{Timeout: httpClientTimeout},
+		busStopsBaseURL:   "https://datamall2.mytransport.sg/ltaodataservice/BusStops",
+		busArrivalBaseURL: "https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival",
+		nearestCache:      make(map[string]nearestCacheEntry),
+	}
 }
 
 func (s *service) GetBusArrival(code string) ([]BusDisplayInfo, error) {
-	// write an api call to get bus arrival
-	// api url is https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival?BusStopCode=71119
-	// it needs an api key
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", "https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival", nil)
+	req, err := http.NewRequest("GET", s.busArrivalBaseURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %v", err)
 	}
 
-	// Add query parameter
 	q := req.URL.Query()
 	q.Add("BusStopCode", code)
 	req.URL.RawQuery = q.Encode()
 
-	// Add API key header
 	req.Header.Add("AccountKey", os.Getenv("LTA_API_KEY"))
 
-	resp, err := client.Do(req)
+	resp, err := s.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}
@@ -115,11 +148,12 @@ func (s *service) GetBusArrival(code string) ([]BusDisplayInfo, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("LTA BusArrival API HTTP %d for BusStopCode=%q (body prefix: %.200q)", resp.StatusCode, code, string(body))
 	}
-	busArrivalResp := BusArrivalResponse{}
 
+	var busArrivalResp BusArrivalResponse
 	if err := json.Unmarshal(body, &busArrivalResp); err != nil {
 		return nil, fmt.Errorf("error unmarshaling LTA BusArrival response for BusStopCode=%q: %v (body prefix: %.200q)", code, err, string(body))
 	}
+
 	var result []BusDisplayInfo
 	for _, svc := range busArrivalResp.Services {
 		info := BusDisplayInfo{
@@ -130,7 +164,6 @@ func (s *service) GetBusArrival(code string) ([]BusDisplayInfo, error) {
 			IsWheelchair: false,
 		}
 
-		// Process arrival times and load status
 		buses := []struct {
 			arrival string
 			load    string
@@ -161,18 +194,16 @@ func (s *service) GetBusArrival(code string) ([]BusDisplayInfo, error) {
 	return result, nil
 }
 
-// haversineDistance calculates the distance between two points on Earth using the Haversine formula
-// Returns distance in kilometers
+// haversineDistance calculates the distance between two points on Earth using the Haversine formula.
+// Returns distance in kilometers.
 func haversineDistance(lat1, lng1, lat2, lng2 float64) float64 {
 	const earthRadiusKm = 6371.0
 
-	// Convert degrees to radians
 	lat1Rad := lat1 * math.Pi / 180
 	lng1Rad := lng1 * math.Pi / 180
 	lat2Rad := lat2 * math.Pi / 180
 	lng2Rad := lng2 * math.Pi / 180
 
-	// Haversine formula
 	dlat := lat2Rad - lat1Rad
 	dlng := lng2Rad - lng1Rad
 
@@ -181,30 +212,58 @@ func haversineDistance(lat1, lng1, lat2, lng2 float64) float64 {
 			math.Sin(dlng/2)*math.Sin(dlng/2)
 
 	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
-	distance := earthRadiusKm * c
-
-	return distance
+	return earthRadiusKm * c
 }
 
-func (s *service) GetNearestBusStops(lat, lng float32) ([]NearestBusStopWithArrivals, error) {
-	// Fetch all bus stops from LTA API (paginated, 500 per page)
-	client := &http.Client{}
-	allBusStops := make([]BusStop, 0)
+// loadBusStops returns the cached bus stop list, refreshing from LTA if the cache is expired or empty.
+// Uses double-checked locking so only one goroutine fetches while others wait.
+func (s *service) loadBusStops() ([]BusStop, error) {
+	s.busStopsMu.RLock()
+	if len(s.busStops) > 0 && time.Since(s.busStopsTime) < busStopsCacheTTL {
+		stops := s.busStops
+		s.busStopsMu.RUnlock()
+		return stops, nil
+	}
+	s.busStopsMu.RUnlock()
+
+	s.busStopsMu.Lock()
+	defer s.busStopsMu.Unlock()
+
+	if len(s.busStops) > 0 && time.Since(s.busStopsTime) < busStopsCacheTTL {
+		return s.busStops, nil
+	}
+
+	stops, err := s.fetchAllBusStops()
+	if err != nil {
+		// If we have stale data, prefer returning it over failing
+		if len(s.busStops) > 0 {
+			log.Warn("failed to refresh bus stops cache, using stale data: %v", err)
+			return s.busStops, nil
+		}
+		return nil, err
+	}
+
+	s.busStops = stops
+	s.busStopsTime = time.Now()
+	log.Info("refreshed bus stops cache: %d stops loaded", len(stops))
+	return stops, nil
+}
+
+func (s *service) fetchAllBusStops() ([]BusStop, error) {
+	allBusStops := make([]BusStop, 0, 5500)
 	skip := 0
 	const pageSize = 500
 
 	for {
-		// Build URL with skip parameter
-		url := fmt.Sprintf("https://datamall2.mytransport.sg/ltaodataservice/BusStops?$skip=%d", skip)
+		url := fmt.Sprintf("%s?$skip=%d", s.busStopsBaseURL, skip)
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			return nil, fmt.Errorf("error creating request: %v", err)
 		}
 
-		// Add API key header
 		req.Header.Add("AccountKey", os.Getenv("LTA_API_KEY"))
 
-		resp, err := client.Do(req)
+		resp, err := s.client.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("error making request: %v", err)
 		}
@@ -220,22 +279,71 @@ func (s *service) GetNearestBusStops(lat, lng float32) ([]NearestBusStopWithArri
 			return nil, fmt.Errorf("error unmarshaling response: %v", err)
 		}
 
-		// Append bus stops from this page
 		allBusStops = append(allBusStops, busStopsResp.Value...)
 
-		// If we got less than pageSize results, we've reached the end
 		if len(busStopsResp.Value) < pageSize {
 			break
 		}
 
-		// Move to next page
 		skip += pageSize
 	}
 
-	// Calculate distance for each bus stop
+	return allBusStops, nil
+}
+
+// nearestCacheKey rounds lat/lng for the metadata cache only (see nearestCacheKeyDecimals).
+// Haversine distance always uses the full-precision lat/lng from the request.
+func nearestCacheKey(lat, lng float64) string {
+	return fmt.Sprintf("%.*f,%.*f", nearestCacheKeyDecimals, lat, nearestCacheKeyDecimals, lng)
+}
+
+// fetchArrivalsForNearest runs one BusArrival request per stop, concurrently.
+func (s *service) fetchArrivalsForNearest(nearest []busStopDistance) []NearestBusStopWithArrivals {
+	count := len(nearest)
+	result := make([]NearestBusStopWithArrivals, count)
+	var wg sync.WaitGroup
+	for i, stop := range nearest {
+		wg.Add(1)
+		go func(idx int, d busStopDistance) {
+			defer wg.Done()
+			arrivals, err := s.GetBusArrival(d.BusStopCode)
+			if err != nil {
+				arrivals = []BusDisplayInfo{}
+			}
+			result[idx] = NearestBusStopWithArrivals{
+				BusStopCode: d.BusStopCode,
+				RoadName:    d.RoadName,
+				Description: d.Description,
+				Distance:    d.Distance,
+				Arrivals:    arrivals,
+			}
+		}(i, stop)
+	}
+	wg.Wait()
+	return result
+}
+
+func (s *service) GetNearestBusStops(lat, lng float64) ([]NearestBusStopWithArrivals, error) {
+	key := nearestCacheKey(lat, lng)
+
+	s.nearestMu.RLock()
+	entry, cacheOk := s.nearestCache[key]
+	if cacheOk && time.Since(entry.fetchedAt) < nearestCacheTTL {
+		meta := entry.nearest
+		s.nearestMu.RUnlock()
+		log.Info("nearest bus stops cache hit for key=%s (refreshing arrivals)", key)
+		return s.fetchArrivalsForNearest(meta), nil
+	}
+	s.nearestMu.RUnlock()
+
+	allBusStops, err := s.loadBusStops()
+	if err != nil {
+		return nil, err
+	}
+
 	distances := make([]busStopDistance, 0, len(allBusStops))
 	for _, stop := range allBusStops {
-		distance := haversineDistance(float64(lat), float64(lng), stop.Latitude, stop.Longitude)
+		distance := haversineDistance(lat, lng, stop.Latitude, stop.Longitude)
 		distances = append(distances, busStopDistance{
 			BusStopCode: stop.BusStopCode,
 			RoadName:    stop.RoadName,
@@ -244,29 +352,31 @@ func (s *service) GetNearestBusStops(lat, lng float32) ([]NearestBusStopWithArri
 		})
 	}
 
-	// Sort by distance
 	sort.Slice(distances, func(i, j int) bool {
 		return distances[i].Distance < distances[j].Distance
 	})
 
-	// Get the nearest 4 bus stops and fetch their arrival times
-	result := make([]NearestBusStopWithArrivals, 0, 4)
-	for i := 0; i < 4 && i < len(distances); i++ {
-		busStopCode := distances[i].BusStopCode
-		arrivals, err := s.GetBusArrival(busStopCode)
-		if err != nil {
-			// Omit arrivals for this stop; response still includes stop metadata.
-			arrivals = []BusDisplayInfo{}
-		}
-
-		result = append(result, NearestBusStopWithArrivals{
-			BusStopCode: distances[i].BusStopCode,
-			RoadName:    distances[i].RoadName,
-			Description: distances[i].Description,
-			Distance:    distances[i].Distance,
-			Arrivals:    arrivals,
-		})
+	n := nearestStopsCount
+	if len(distances) < n {
+		n = len(distances)
 	}
+	// Copy only the nearest n rows so the cache does NOT pin the full ~5k distances slice.
+	nearestMeta := make([]busStopDistance, n)
+	copy(nearestMeta, distances[:n])
 
-	return result, nil
+	out := s.fetchArrivalsForNearest(nearestMeta)
+
+	s.nearestMu.Lock()
+	s.nearestCache[key] = nearestCacheEntry{
+		nearest:   nearestMeta,
+		fetchedAt: time.Now(),
+	}
+	for k, v := range s.nearestCache {
+		if time.Since(v.fetchedAt) > nearestCacheTTL*2 {
+			delete(s.nearestCache, k)
+		}
+	}
+	s.nearestMu.Unlock()
+
+	return out, nil
 }

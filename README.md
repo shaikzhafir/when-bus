@@ -57,7 +57,7 @@ Example body:
 
 ### `GET /getNearestBusStops`
 
-Returns the **nearest four** bus stops to a point, each with arrival data. **`lat`** and **`lng`** are required (WGS84 decimals).
+Returns the **nearest four** bus stops to a point, each with arrival data. **`lat`** and **`lng`** are required (WGS84 decimal degrees). The server parses them as **64-bit floats** (`double`): use as many fractional digits as your source provides (for example from GPS). Distance calculations use the full parsed values; only a coarse in-memory cache buckets by 6 decimal places so repeated nearby requests skip rescanning all stops.
 
 ```bash
 curl -sS 'http://localhost:8080/getNearestBusStops?lat=1.326277&lng=103.890342'

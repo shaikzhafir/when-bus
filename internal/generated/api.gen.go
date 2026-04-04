@@ -65,11 +65,11 @@ type GetBusArrivalParams struct {
 
 // GetNearestBusStopsParams defines parameters for GetNearestBusStops.
 type GetNearestBusStopsParams struct {
-	// Lat Latitude coordinate
-	Lat float32 `form:"lat" json:"lat"`
+	// Lat Latitude (WGS84 degrees, double precision — pass as many decimals as your source provides)
+	Lat float64 `form:"lat" json:"lat"`
 
-	// Lng Longitude coordinate
-	Lng float32 `form:"lng" json:"lng"`
+	// Lng Longitude (WGS84 degrees, double precision — pass as many decimals as your source provides)
+	Lng float64 `form:"lng" json:"lng"`
 }
 
 // ServerInterface represents all server handlers.

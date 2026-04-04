@@ -66,19 +66,19 @@ paths:
       parameters:
         - name: lat
           in: query
-          description: Latitude coordinate
+          description: Latitude (WGS84 degrees, double precision — pass as many decimals as your source provides)
           required: true
           schema:
             type: number
-            format: float
+            format: double
             example: 1.326277
         - name: lng
           in: query
-          description: Longitude coordinate
+          description: Longitude (WGS84 degrees, double precision — pass as many decimals as your source provides)
           required: true
           schema:
             type: number
-            format: float
+            format: double
             example: 103.890342
       responses:
         '200':

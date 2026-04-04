@@ -2,3 +2,4 @@ tailwindcss
 .env
 when-bus
 server
+bin/
