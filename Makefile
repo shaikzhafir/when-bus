@@ -1,6 +1,9 @@
-.PHONY: generate-api help install-tools validate-openapi run run-hot run-plain build test
+.PHONY: generate-api help install-tools validate-openapi run run-hot run-plain build build-linux verify-linux test
 
 BINARY := when-bus
+GO_CONTAINER_IMAGE ?= docker.io/library/golang:1.24
+VPS_ARCH ?= amd64
+LINUX_BINARY ?= bin/$(BINARY)-linux-$(VPS_ARCH)
 
 # OpenAPI code generation
 generate-api:
@@ -37,6 +40,23 @@ build:
 	@mkdir -p bin
 	go build -o bin/$(BINARY) ./cmd/server
 
+build-linux:
+	@mkdir -p bin
+	container run --rm \
+		--volume "$(CURDIR):/src" \
+		--workdir /src \
+		--env CGO_ENABLED=0 \
+		--env GOOS=linux \
+		--env GOARCH=$(VPS_ARCH) \
+		$(GO_CONTAINER_IMAGE) \
+		go build -trimpath -ldflags="-s -w" -o /src/$(LINUX_BINARY) ./cmd/server
+
+verify-linux:
+	test -x "$(LINUX_BINARY)"
+	file "$(LINUX_BINARY)" | grep -q "ELF 64-bit"
+	file "$(LINUX_BINARY)" | grep -qi "$(VPS_ARCH)"
+	file "$(LINUX_BINARY)" | grep -qi "statically linked"
+
 test:
 	go test ./...
 
@@ -46,9 +66,10 @@ help:
 	@echo "  make run-hot           - Alias for make run"
 	@echo "  make run-plain         - Run once without entr (sources .env)"
 	@echo "  make build             - Build bin/$(BINARY)"
+	@echo "  make build-linux       - Build $(LINUX_BINARY)"
+	@echo "  make verify-linux      - Verify $(LINUX_BINARY)"
 	@echo "  make test              - Run all tests"
 	@echo "  make generate-api      - Generate Go server code from openapi.yaml"
 	@echo "  make install-tools     - Install oapi-codegen tool"
 	@echo "  make validate-openapi  - Validate the OpenAPI specification"
 	@echo "  make help              - Show this help message"
-
